@@ -7,16 +7,6 @@ Like the rest of Kubernetes, frr-controller has used
 now adopting go 1.11 modules.  There are thus two alternative ways to
 go about fetching this demo and its dependencies.
 
-### Fetch with godep
-
-When NOT using go 1.11 modules, you can use the following commands.
-
-```sh
-go get -d k8s.io/frr-controller
-cd $GOPATH/src/k8s.io/frr-controller
-godep restore
-```
-
 ### When using go 1.11 modules
 
 When using go 1.11 modules (`GO111MODULE=on`), issue the following
