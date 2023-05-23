@@ -1,0 +1,12 @@
+apiVersion: frrcontroller.nocsys.cn/v1alpha1
+kind: Frr
+metadata:
+  name: example-frr
+spec:
+  deploymentName: example-foo
+  replicas: 1
+  image: frrouting/frr:latest
+  asNumber: 65001
+  neighbor:
+  - 10.10.10.1
+  - 10.10.10.2
