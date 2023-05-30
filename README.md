@@ -51,8 +51,11 @@ go build -o frr-controller .
 ```sh
 cd frr-controller
 docker build -t frr_conf:v1 -f build/Dockerfile .
-docker run -d  --name=frr-conf --env ASN=345 --env NEIGHBORS=10.0.0.30,10.0.0.40 frr_conf:v1
-docker cp frr-conf:/workspace/frr.conf frr.conf
+# default output dir /etc/frr/frr.conf
+docker run -d --name=frr-conf --env ASN=345 --env NEIGHBORS=10.0.0.30,10.0.0.40 frr_conf:v1
+# or you can output a destination dir
+docker run -d --name=frr-conf --env ASN=345 --env NEIGHBORS=10.0.0.30,10.0.0.40 frr_conf:v1 /usr/local/etc/frr/frr.conf
+
 ```
 
 ## Running
