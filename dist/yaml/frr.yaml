@@ -1,0 +1,42 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: frr-controller
+  namespace: ovn-kubernetes
+  annotations:
+    kubernetes.io/description: |
+      This Deployment launches the frr controller components.
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: frr-controller
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        name: frr-controller
+    spec:
+      serviceAccountName: frr
+
+      containers:
+      - name: frr-controller
+        image: "nocsyscn/frr:0.1-saic"
+        imagePullPolicy: "IfNotPresent"
+
+        command: ["/root/frr.sh", "frr-controller"]
+        
+        volumeMounts:
+        - mountPath: /var/log/frr-controller/
+          name: host-var-log-frr
+
+      volumes:
+      - name: host-var-log-frr
+        hostPath:
+          path: /var/log/frr-controller
+      tolerations:
+      - operator: "Exists"
