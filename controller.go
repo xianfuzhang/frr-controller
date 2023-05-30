@@ -404,6 +404,13 @@ func newDeployment(frr *frrv1alpha1.Frr) *appsv1.Deployment {
 		Name:  "NEIGHBORS",
 		Value: strings.Join(frr.Spec.Neighbors, ","),
 	})
+	frrContainerSecurityContext := &corev1.SecurityContext{}
+	frrContainerSecurityContext.Capabilities = &corev1.Capabilities{
+		Add: []corev1.Capability{
+			"NET_ADMIN",
+			"SYS_ADMIN",
+		},
+	}
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      frr.Spec.DeploymentName,
@@ -428,6 +435,14 @@ func newDeployment(frr *frrv1alpha1.Frr) *appsv1.Deployment {
 							Image:           frr.Spec.Image,
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							Env:             env,
+							Command: []string{
+								"/bin/sh",
+							},
+							Args: []string{
+								"-c",
+								"sed -i -e '/bgpd/s/no/yes/' /etc/frr/daemons; /usr/lib/frr/docker-start",
+							},
+							SecurityContext: frrContainerSecurityContext,
 						},
 					},
 					NodeSelector: frr.Spec.NodeSelector.MatchLabels,
