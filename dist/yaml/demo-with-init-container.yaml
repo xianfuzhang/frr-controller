@@ -1,0 +1,30 @@
+kind: Pod
+apiVersion: v1
+metadata:
+  name: init-demo
+spec:
+  containers:
+  - name: busybox
+    image: "busybox:latest"
+    imagePullPolicy: "IfNotPresent"
+    command: ["/bin/sh", "-c", "tail -f /dev/null"]
+    volumeMounts:
+    - name: confdir
+      mountPath: /etc/frr/
+  initContainers:
+  - name: prepare-conf
+    image: nocsyscn/frr_conf:0.1-saic
+    imagePullPolicy: "IfNotPresent"
+    env:
+      - name: ASNUMBER
+        value: "400"
+      - name: NEIGHBORS
+        value: "171.16.10.100,171.17.10.100"
+    args:
+    - "/etc/frr/frr.conf"
+    volumeMounts:
+    - name: confdir
+      mountPath: "/etc/frr/"
+  volumes:
+  - name: confdir
+    emptyDir: {}    
