@@ -18,6 +18,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"time"
 
 	kubeinformers "k8s.io/client-go/informers"
@@ -36,7 +37,23 @@ import (
 var (
 	masterURL  string
 	kubeconfig string
+	asnRange   rangeVar
+	vniRange   rangeVar
 )
+
+type rangeVar struct {
+	start int
+	end   int
+}
+
+func (f *rangeVar) String() string {
+	return fmt.Sprintf("%d-%d", f.start, f.end)
+}
+
+func (f *rangeVar) Set(value string) error {
+	_, err := fmt.Sscanf(value, "%d-%d", &f.start, &f.end)
+	return err
+}
 
 func main() {
 	klog.InitFlags(nil)
@@ -65,7 +82,9 @@ func main() {
 
 	controller := NewController(kubeClient, frrClient,
 		kubeInformerFactory.Apps().V1().Deployments(),
-		frrInformerFactory.Frrcontroller().V1alpha1().Frrs())
+		frrInformerFactory.Frrcontroller().V1alpha1().Frrs(),
+		vniRange.start, vniRange.end,
+		asnRange.start, asnRange.end)
 
 	// notice that there is no need to run Start methods in a separate goroutine. (i.e. go kubeInformerFactory.Start(stopCh)
 	// Start method is non-blocking and runs all registered informers in a dedicated goroutine.
@@ -80,4 +99,6 @@ func main() {
 func init() {
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "Path to a kubeconfig. Only required if out-of-cluster.")
 	flag.StringVar(&masterURL, "master", "", "The address of the Kubernetes API server. Overrides any value in kubeconfig. Only required if out-of-cluster.")
+	flag.Var(&asnRange, "asn_range", "The range of ASNs to use for the FRRs.")
+	flag.Var(&vniRange, "vni_range", "The range of VNIs to use for the FRRs.")
 }

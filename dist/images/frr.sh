@@ -8,6 +8,16 @@ cmd=${1:-""}
 frr_pod_name=${FRR_POD_NAME:-$(hostname)}
 frrlogdir=/var/log/frr-controller
 
+# Environment variables are used to customize operation
+# VNI_RANGE - the vni allocation range
+# ASN_RANGE - the asn allocation range for l2vpn
+# LOGFILE_MAXSIZE - log file max size in MB(default 100 MB)
+# LOGFILE_MAXBACKUPS - log file max backups (default 5)
+# LOGFILE_MAXAGE - log file max age in days (default 5 days)
+
+vni_range=${VNI_RANGE:-"1000-2000"}
+asn_range=${ASN_RANGE:-"65001-65534"}
+
 display_version() {
   echo " =================== Frr pod name: ${frr_pod_name}"
   if [[ -f /root/git_info ]]; then
@@ -21,8 +31,10 @@ display_version() {
 frr-controller() {
   echo "=============== frr-controller =============== "
   /usr/bin/frr-controller \
-    -log_dir=${frrlogdir} \
-    -log_file=${frrlogdir}/frr-controller.log
+    --asn_range=${asn_range} \
+    --vni_range=${vni_range} \
+    --log_dir=${frrlogdir} \
+    --log_file=${frrlogdir}/frr-controller.log
 
   echo "=============== frr-controller ========== running"
 }

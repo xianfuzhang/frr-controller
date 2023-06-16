@@ -29,6 +29,7 @@ import (
 // +kubebuilder:printcolumn:name="AS Number",type="integer",JSONPath=".spec.asNumber",description="AS Number"
 // +kubebuilder:printcolumn:name="Replicas",type="integer",JSONPath=".spec.replicas",description="Replicas"
 // +kubebuilder:printcolumn:name="Available Replicas",type="integer",JSONPath=".status.availableReplicas",description="Available Replicas"
+// +kubebuilder:printcolumn:name="VNI",type="integer",JSONPath=".sepc.vni",description="VNI number"
 // +kubebuilder:printcolumn:name="Nodes",type="string",JSONPath=".status.nodes",description="Nodes"
 type Frr struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -41,11 +42,19 @@ type Frr struct {
 
 // FrrSpec is the spec for a Frr resource
 type FrrSpec struct {
-	DeploymentName string   `json:"deploymentName"`
-	Replicas       *int32   `json:"replicas"`
-	Image          string   `json:"image"`
-	ASNumber       int      `json:"asNumber"`
-	Neighbors      []string `json:"neighbor,omitempty"`
+	DeploymentName string `json:"deploymentName"`
+	Replicas       *int32 `json:"replicas"`
+	Image          string `json:"image"`
+	// +optional
+	// +kubebuilder:default="nocsyscn/frr_conf:0.2"
+	InitConfigImage string `json:"initConfigImage,omitempty"`
+	// +optional
+	ASNumber  int      `json:"asNumber,omitempty"`
+	Neighbors []string `json:"neighbors"`
+	// +optional
+	// +kubebuilder:default=1000
+	VNI           int    `json:"vni,omitempty"`
+	LogicalSwitch string `json:"logicalSwitch,omitempty"`
 	// +kubebuilder:default={matchLabels: {frrcontroller.nocsys.cn/frr-assignable: ""}}
 	// +optional
 	NodeSelector metav1.LabelSelector `json:"nodeSelector,omitempty"`
@@ -55,6 +64,7 @@ type FrrSpec struct {
 type FrrStatus struct {
 	AvailableReplicas int32  `json:"availableReplicas"`
 	Nodes             string `json:"nodes,omitempty"`
+	VNI               int    `json:"vni,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

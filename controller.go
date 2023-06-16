@@ -43,6 +43,8 @@ import (
 	frrscheme "github.com/guohao117/frr-controller/pkg/generated/clientset/versioned/scheme"
 	informers "github.com/guohao117/frr-controller/pkg/generated/informers/externalversions/frrcontroller/v1alpha1"
 	listers "github.com/guohao117/frr-controller/pkg/generated/listers/frrcontroller/v1alpha1"
+
+	"github.com/guohao117/frr-controller/pkg/range_manager"
 )
 
 const controllerAgentName = "sample-controller"
@@ -62,8 +64,17 @@ const (
 	MessageResourceSynced = "Frr synced successfully"
 )
 
+var (
+	frrUID int64 = 100
+	frrGID int64 = 101
+)
+
 // Controller is the controller implementation for Frr resources
 type Controller struct {
+	// vni allocator
+	vniManager *rangemanager.RangeManager
+	// asn allocator
+	asnManager *rangemanager.RangeManager
 	// kubeclientset is a standard kubernetes clientset
 	kubeclientset kubernetes.Interface
 	// sampleclientset is a clientset for our own API group
@@ -90,7 +101,9 @@ func NewController(
 	kubeclientset kubernetes.Interface,
 	frrclientset clientset.Interface,
 	deploymentInformer appsinformers.DeploymentInformer,
-	frrInformer informers.FrrInformer) *Controller {
+	frrInformer informers.FrrInformer,
+	minVNI, maxVNI int,
+	minASN, maxASN int) *Controller {
 
 	// Create event broadcaster
 	// Add sample-controller types to the default Kubernetes Scheme so Events can be
@@ -102,7 +115,17 @@ func NewController(
 	eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: kubeclientset.CoreV1().Events("")})
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: controllerAgentName})
 
+	vniMan, err := rangemanager.NewRangeManager(minVNI, maxVNI)
+	if err != nil {
+		return nil
+	}
+	asnMan, err := rangemanager.NewRangeManager(minASN, maxASN)
+	if err != nil {
+		return nil
+	}
 	controller := &Controller{
+		vniManager:        vniMan,
+		asnManager:        asnMan,
 		kubeclientset:     kubeclientset,
 		frrclientset:      frrclientset,
 		deploymentsLister: deploymentInformer.Lister(),
@@ -261,6 +284,7 @@ func (c *Controller) syncHandler(key string) error {
 
 		return err
 	}
+	frrscopedName := frr.Namespace + "/" + frr.Name
 
 	deploymentName := frr.Spec.DeploymentName
 	if deploymentName == "" {
@@ -275,7 +299,19 @@ func (c *Controller) syncHandler(key string) error {
 	deployment, err := c.deploymentsLister.Deployments(frr.Namespace).Get(deploymentName)
 	// If the resource doesn't exist, we'll create it
 	if errors.IsNotFound(err) {
-		deployment, err = c.kubeclientset.AppsV1().Deployments(frr.Namespace).Create(context.TODO(), newDeployment(frr), metav1.CreateOptions{})
+		asn, err := c.asnManager.Allocate(frrscopedName)
+		if err != nil {
+			return err
+		}
+		vni, err := c.vniManager.Allocate(frrscopedName)
+		if err != nil {
+			return err
+		}
+		deployment, err = c.kubeclientset.AppsV1().Deployments(frr.Namespace).Create(context.TODO(), newDeployment(frr, asn, vni), metav1.CreateOptions{})
+		if err != nil {
+			klog.Errorf("Failed to create deployment: %v", err)
+			return err
+		}
 	}
 
 	// If an error occurs during Get/Create, we'll requeue the item so we can
@@ -324,6 +360,7 @@ func (c *Controller) updateFrrStatus(frr *frrv1alpha1.Frr, deployment *appsv1.De
 	// You can use DeepCopy() to make a deep copy of original object and modify this copy
 	// Or create a copy manually for better performance
 	frrCopy := frr.DeepCopy()
+	frrCopy.Status.VNI = frr.Spec.VNI
 	frrCopy.Status.AvailableReplicas = deployment.Status.AvailableReplicas
 
 	// If the CustomResourceSubresources feature gate is not enabled,
@@ -387,22 +424,43 @@ func (c *Controller) handleObject(obj interface{}) {
 	}
 }
 
+// func newInitContainers(frr *frrv1alpha1.Frr) []corev1.Container {
+// }
+
 // newDeployment creates a new Deployment for a Frr resource. It also sets
 // the appropriate OwnerReferences on the resource so handleObject can discover
 // the Frr resource that 'owns' it.
-func newDeployment(frr *frrv1alpha1.Frr) *appsv1.Deployment {
+func newDeployment(frr *frrv1alpha1.Frr, asn, vni int) *appsv1.Deployment {
 	labels := map[string]string{
 		"app":        "frr",
 		"controller": frr.Name,
 	}
-	env := make([]corev1.EnvVar, 0)
-	env = append(env, corev1.EnvVar{
+	frrContainerEnv := make([]corev1.EnvVar, 0)
+	frrContainerEnv = append(frrContainerEnv, corev1.EnvVar{
 		Name:  "ASNUMBER",
 		Value: fmt.Sprintf("%d", frr.Spec.ASNumber),
 	})
-	env = append(env, corev1.EnvVar{
+	frrContainerEnv = append(frrContainerEnv, corev1.EnvVar{
 		Name:  "NEIGHBORS",
 		Value: strings.Join(frr.Spec.Neighbors, ","),
+	})
+	frrContainerEnv = append(frrContainerEnv, corev1.EnvVar{
+		Name:  "VNI",
+		Value: fmt.Sprintf("%d", vni),
+	})
+	frrContainerEnv = append(frrContainerEnv, corev1.EnvVar{
+		Name:  "TINT_SUBREAPER",
+		Value: "true",
+	})
+	// add an envfrom status.podIP
+	frrContainerEnv = append(frrContainerEnv, corev1.EnvVar{
+		Name: "VTEP_LOCAL",
+		ValueFrom: &corev1.EnvVarSource{
+			FieldRef: &corev1.ObjectFieldSelector{
+				APIVersion: "v1",
+				FieldPath:  "status.podIP",
+			},
+		},
 	})
 	frrContainerSecurityContext := &corev1.SecurityContext{}
 	frrContainerSecurityContext.Capabilities = &corev1.Capabilities{
@@ -411,6 +469,69 @@ func newDeployment(frr *frrv1alpha1.Frr) *appsv1.Deployment {
 			"SYS_ADMIN",
 		},
 	}
+
+	volumes := make([]corev1.Volume, 0)
+	// add a emptyDir volume for frr-conf
+	volumes = append(volumes, corev1.Volume{
+		Name: "frr-startup",
+		VolumeSource: corev1.VolumeSource{
+			EmptyDir: &corev1.EmptyDirVolumeSource{},
+		},
+	})
+
+	ovsVols := make([]corev1.Volume, 0)
+	ovsVols = append(ovsVols, corev1.Volume{
+		Name: "host-var-run-ovs",
+		VolumeSource: corev1.VolumeSource{
+			HostPath: &corev1.HostPathVolumeSource{
+				Path: "/var/run/openvswitch",
+			},
+		},
+	})
+	ovsVols = append(ovsVols, corev1.Volume{
+		Name: "host-run-ovs",
+		VolumeSource: corev1.VolumeSource{
+			HostPath: &corev1.HostPathVolumeSource{
+				Path: "/run/openvswitch",
+			},
+		},
+	})
+	ovsVols = append(ovsVols, corev1.Volume{
+		Name: "host-modules",
+		VolumeSource: corev1.VolumeSource{
+			HostPath: &corev1.HostPathVolumeSource{
+				Path: "/lib/modules",
+			},
+		},
+	})
+
+	initContainerVolumeMounts := make([]corev1.VolumeMount, 0)
+	initContainerVolumeMounts = append(initContainerVolumeMounts, corev1.VolumeMount{
+		Name:      "frr-startup",
+		MountPath: "/tmp/frr",
+	})
+
+	frrContainerVolumeMounts := make([]corev1.VolumeMount, 0)
+	// add a volume mount for frr-conf
+	// frrContainerVolumeMounts = append(frrContainerVolumeMounts, corev1.VolumeMount{
+	// 	Name:      "frr-conf",
+	// 	MountPath: "/etc/frr",
+	// })
+	frrContainerVolumeMounts = append(frrContainerVolumeMounts, corev1.VolumeMount{
+		Name:      "host-var-run-ovs",
+		MountPath: "/var/run/openvswitch",
+	})
+	frrContainerVolumeMounts = append(frrContainerVolumeMounts, corev1.VolumeMount{
+		Name:      "host-run-ovs",
+		MountPath: "/run/openvswitch",
+	})
+	frrContainerVolumeMounts = append(frrContainerVolumeMounts, corev1.VolumeMount{
+		Name:      "host-modules",
+		MountPath: "/lib/modules",
+		ReadOnly:  true,
+	})
+	frrContainerVolumeMounts = append(frrContainerVolumeMounts, initContainerVolumeMounts...)
+
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      frr.Spec.DeploymentName,
@@ -429,18 +550,44 @@ func newDeployment(frr *frrv1alpha1.Frr) *appsv1.Deployment {
 					Labels: labels,
 				},
 				Spec: corev1.PodSpec{
+					HostNetwork: true,
+					Volumes:     append(volumes, ovsVols...),
+					InitContainers: []corev1.Container{
+						{
+							Name:            "frr-conf-init",
+							Image:           frr.Spec.InitConfigImage,
+							ImagePullPolicy: corev1.PullIfNotPresent,
+							Env:             frrContainerEnv,
+							VolumeMounts:    initContainerVolumeMounts,
+							SecurityContext: &corev1.SecurityContext{
+								RunAsUser:  &frrUID,
+								RunAsGroup: &frrGID,
+							},
+							Args: []string{
+								"/tmp/frr/frr.conf",
+							},
+						},
+					},
 					Containers: []corev1.Container{
 						{
 							Name:            "frr",
 							Image:           frr.Spec.Image,
 							ImagePullPolicy: corev1.PullIfNotPresent,
-							Env:             env,
+							Env:             frrContainerEnv,
+							VolumeMounts:    frrContainerVolumeMounts,
 							Command: []string{
 								"/bin/sh",
 							},
 							Args: []string{
 								"-c",
-								"sed -i -e '/bgpd/s/no/yes/' /etc/frr/daemons; /usr/lib/frr/docker-start",
+								"/sbin/tini -- cp /tmp/frr/frr.conf /etc/frr/ && /usr/lib/frr/docker-start",
+								// `/sbin/tini -- /usr/lib/frr/docker-start &
+								// attempts=0
+								// until [[ -f /var/log/frr/frr.log || $attempts -eq 60 ]]; do
+								// 	sleep 1
+								// 	attempts=$(( $attempts + 1 ))
+								// done
+								// tail -f /var/log/frr/frr.log`,
 							},
 							SecurityContext: frrContainerSecurityContext,
 						},

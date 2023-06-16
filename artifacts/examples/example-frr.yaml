@@ -3,10 +3,10 @@ kind: Frr
 metadata:
   name: example-frr
 spec:
-  deploymentName: example-foo
+  deploymentName: example-frr
   replicas: 1
-  image: frrouting/frr:latest
+  image: nocsyscn/ovnk-frr:8.5.1
+  initConfigImage: nocsyscn/frr_conf:0.2
   asNumber: 65001
-  neighbor:
-  - 10.10.10.1
-  - 10.10.10.2
+  neighbors:
+  - 172.20.0.5
