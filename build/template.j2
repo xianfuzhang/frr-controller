@@ -1,5 +1,5 @@
-router bgp 6500
-    bgp router-id 192.168.40.131
+router bgp {{ASN}}
+    bgp router-id {{VTEP_LOCAL}}
 {%- for i in NEIGHBORS%}
     neighbor {{i}} remote-as {{ASN}}
 {%- endfor%}
@@ -10,3 +10,5 @@ address-family l2vpn evpn
 {%- endfor%}    
     advertise-all-vni
     advertise-svi-ip
+exit-address-family
+exit
