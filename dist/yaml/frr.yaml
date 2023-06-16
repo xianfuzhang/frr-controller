@@ -25,7 +25,7 @@ spec:
 
       containers:
       - name: frr-controller
-        image: "nocsyscn/frr:0.1-saic"
+        image: "nocsyscn/frr:0.1"
         imagePullPolicy: "IfNotPresent"
 
         command: ["/root/frr.sh", "frr-controller"]

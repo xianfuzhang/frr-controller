@@ -13,7 +13,7 @@ spec:
       mountPath: /etc/frr/
   initContainers:
   - name: prepare-conf
-    image: nocsyscn/frr_conf:0.1-saic
+    image: nocsyscn/frr_conf:0.1
     imagePullPolicy: "IfNotPresent"
     env:
       - name: ASNUMBER

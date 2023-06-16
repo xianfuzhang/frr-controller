@@ -15,7 +15,7 @@ cd frr-controller/dist/images
 ## build image
 ```sh
 cd frr-controller/dist/images
-docker build -t nocsyscn/frr:0.1-saic -f Dockerfile .
+docker build -t nocsyscn/frr:0.1 -f Dockerfile .
 ```
 
 ## run frr controller
