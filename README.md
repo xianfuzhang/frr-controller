@@ -52,9 +52,9 @@ go build -o frr-controller .
 cd frr-controller
 docker build -t nocsyscn/frr_conf:0.1-saic -f build/frr.conf.Dockerfile .
 # default output dir /etc/frr/frr.conf
-docker run -d --name=frr-conf --env ASNUMBER=345 --env NEIGHBORS=10.0.0.30,10.0.0.40 nocsyscn/frr_conf:0.1-saic
+docker run -d --name=frr-conf --env ASNUMBER=345 --env VTEP_LOCAL=11.10.10.10 --env NEIGHBORS=10.0.0.30,10.0.0.40 nocsyscn/frr_conf:0.1-saic
 # or you can output a destination dir
-docker run -d --name=frr-conf --env ASNUMBER=345 --env NEIGHBORS=10.0.0.30,10.0.0.40 nocsyscn/frr_conf:0.1-saic /usr/local/etc/frr/frr.conf
+docker run -d --name=frr-conf --env ASNUMBER=345 --env VTEP_LOCAL=11.10.10.10 --env NEIGHBORS=10.0.0.30,10.0.0.40 nocsyscn/frr_conf:0.1-saic /usr/local/etc/frr/frr.conf
 
 ```
 
