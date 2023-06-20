@@ -28,6 +28,10 @@ spec:
       jsonPath: .status.availableReplicas
       name: Available Replicas
       type: integer
+    - description: VNI number
+      jsonPath: .sepc.vni
+      name: VNI
+      type: integer
     - description: Nodes
       jsonPath: .status.nodes
       name: Nodes
@@ -58,7 +62,12 @@ spec:
                 type: string
               image:
                 type: string
-              neighbor:
+              initConfigImage:
+                default: nocsyscn/frr_conf:0.2
+                type: string
+              logicalSwitch:
+                type: string
+              neighbors:
                 items:
                   type: string
                 type: array
@@ -115,10 +124,13 @@ spec:
               replicas:
                 format: int32
                 type: integer
+              vni:
+                default: 1000
+                type: integer
             required:
-            - asNumber
             - deploymentName
             - image
+            - neighbors
             - replicas
             type: object
           status:
@@ -129,6 +141,8 @@ spec:
                 type: integer
               nodes:
                 type: string
+              vni:
+                type: integer
             required:
             - availableReplicas
             type: object
